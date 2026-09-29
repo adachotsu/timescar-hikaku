@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タイムズカー 深夜パック vs 時間料金 比較</title>
+<style>
+  :root {
+    --text: #3f3a36;
+    --text-h: #1d1a17;
+    --bg: #ffffff;
+    --bg-page: #f6f3ee;
+    --border: #e4ded4;
+    --accent: #e8580c;
+    --accent-h: #c94a08;
+    --accent-bg: rgba(232, 88, 12, 0.08);
+    --win-bg: rgba(34, 139, 74, 0.09);
+    --win-border: rgba(34, 139, 74, 0.35);
+    --win: #1f7a44;
+    --radius: 14px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(29,26,23,0.06), 0 8px 24px -10px rgba(29,26,23,0.12);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", sans-serif;
+    background: var(--bg-page);
+    color: var(--text);
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  header {
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 21px;
+    color: var(--text-h);
+    margin: 0 0 6px;
+  }
+  .subtitle {
+    font-size: 13.5px;
+    color: var(--text);
+  }
+  .badge-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 15px;
+    margin: 0 0 14px;
+    color: var(--text-h);
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-h);
+    margin-bottom: 6px;
+  }
+  .field .hint {
+    font-size: 11.5px;
+    color: #8a8378;
+    margin-top: 4px;
+  }
+  .row {
+    display: flex;
+    gap: 10px;
+  }
+  .row > div { flex: 1; }
+  input[type="datetime-local"],
+  input[type="number"],
+  input[type="text"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-page);
+    color: var(--text-h);
+    font-size: 15px;
+    font-family: inherit;
+  }
+  input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    background: var(--bg);
+  }
+  .destination-row {
+    display: flex;
+    gap: 8px;
+  }
+  .destination-row input { flex: 1; min-width: 0; }
+  button.primary {
+    flex: 0 0 auto;
+    padding: 10px 16px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  button.primary:hover { background: var(--accent-h); }
+  button.primary:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  #destinationStatus.error { color: #b3261e; }
+  #destinationStatus.success { color: var(--win); }
+  .duration-inputs {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .duration-inputs input { width: 100%; }
+  .duration-inputs span {
+    font-size: 13px;
+    color: var(--text);
+    flex: 0 0 auto;
+  }
+  .results {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  @media (max-width: 480px) {
+    .results { grid-template-columns: 1fr; }
+  }
+  .result-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    background: var(--bg-page);
+    position: relative;
+  }
+  .result-card.winner {
+    background: var(--win-bg);
+    border-color: var(--win-border);
+  }
+  .result-card .plan-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .result-card .price {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text-h);
+    letter-spacing: -0.5px;
+  }
+  .result-card.winner .price { color: var(--win); }
+  .result-card .breakdown {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .winner-tag {
+    position: absolute;
+    top: -10px;
+    right: 12px;
+    background: var(--win);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+  }
+  .disabled-note {
+    font-size: 12.5px;
+    color: #a09789;
+    margin-top: 8px;
+  }
+  .diff-banner {
+    margin-top: 14px;
+    background: var(--accent-bg);
+    border: 1px solid rgba(232,88,12,0.3);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    font-size: 13.5px;
+    color: var(--accent-h);
+    font-weight: 600;
+    text-align: center;
+  }
+  .caveat {
+    font-size: 11.5px;
+    color: #96897a;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    margin-top: 18px;
+  }
+  .caveat strong { color: var(--text-h); }
+  .rate-table {
+    font-size: 11.5px;
+    color: #8a8378;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>タイムズカー 深夜パック vs 時間料金</h1>
+    <p class="subtitle">出発時刻・利用時間・走行距離を入れると、深夜パックと通常の時間料金でどちらが安いか一目でわかります。</p>
+    <div class="badge-row">
+      <span class="badge">📍 大阪 九条駅発着</span>
+      <span class="badge">🚗 ベーシッククラス</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <h2>利用条件を入力</h2>
+
+    <div class="field">
+      <label for="startTime">出発時刻</label>
+      <input type="datetime-local" id="startTime">
+      <div class="hint">深夜パックは18:00〜翌9:00の間に出発する場合のみ利用できます。</div>
+    </div>
+
+    <div class="field">
+      <label>利用時間</label>
+      <div class="duration-inputs">
+        <input type="number" id="durHours" min="0" value="6" inputmode="numeric">
+        <span>時間</span>
+        <input type="number" id="durMinutes" min="0" max="59" step="15" value="0" inputmode="numeric">
+        <span>分</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="destination">行き先(場所名で距離を自動計算)</label>
+      <div class="destination-row">
+        <input type="text" id="destination" placeholder="例: 難波、USJ、梅田駅" inputmode="text">
+        <button type="button" id="calcDistanceBtn" class="primary">計算</button>
+      </div>
+      <div class="hint" id="destinationStatus">九条駅前を出発地として、往復のおおよその走行距離を自動入力します(OpenStreetMapのルート検索を利用)。</div>
+    </div>
+
+    <div class="field">
+      <label for="distance">走行距離(片道+復路の合計・目安)</label>
+      <input type="number" id="distance" min="0" value="20" inputmode="numeric">
+      <div class="hint">通常の時間料金は20kmまで無料、超過分20円/km。深夜パックは0kmから20円/kmが加算されます。行き先から自動計算した場合もここで手動調整できます。</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>比較結果</h2>
+    <div class="results" id="results"></div>
+    <div id="diffBanner"></div>
+  </div>
+
+  <div class="caveat">
+    <strong>この計算について</strong><br>
+    タイムズカーシェア公式サイトの公開料金(ベーシッククラス:15分220円/6時間上限4,290円/12時間上限5,500円/24時間上限6,600円/36時間上限8,800円/48時間上限9,900円/72時間上限14,300円/以降1日毎5,500円、深夜パック2,640円・18:00〜翌9:00・延長6時間まで、距離料金20円/km)をもとに計算しています。<br><br>
+    実際の九条エリア(タイムズ九条駅前第6・タイムズ九条第4)での利用明細4件と照合済みで、通常料金・深夜パックとも完全に一致することを確認しています。特に6時間上限が発動するケース(5時間39分利用で上限の4,290円に丸められる例)でも一致を確認できたため、上限の積み上がり方についても実データで裏付けが取れています。<br><br>
+    ただし「距離料金ステージ割引」「カーシェアeチケット割引」など、会員ステージや保有チケットに応じた個人単位の割引はこの計算に含まれていません。実際の請求額はそうした割引分だけ、ここでの表示額より安くなる場合があります。
+  </div>
+</div>
+
+<script>
+const RATE_15MIN = 220;
+const DISTANCE_RATE = 20;
+const FREE_KM_NORMAL = 20;
+const NIGHT_PACK_PRICE = 2640;
+const NIGHT_PACK_MAX_EXT_MIN = 6 * 60;
+
+const CAP_BRACKETS = [
+  { hours: 6, price: 4290 },
+  { hours: 12, price: 5500 },
+  { hours: 24, price: 6600 },
+  { hours: 36, price: 8800 },
+  { hours: 48, price: 9900 },
+  { hours: 72, price: 14300 },
+];
+const EXTRA_DAY_PRICE = 5500;
+
+function yen(n) {
+  return '¥' + Math.round(n).toLocaleString('ja-JP');
+}
+
+function timeCapFor(hours) {
+  for (const b of CAP_BRACKETS) {
+    if (hours <= b.hours) return b.price;
+  }
+  const extraDays = Math.ceil((hours - 72) / 24);
+  return 14300 + extraDays * EXTRA_DAY_PRICE;
+}
+
+function calcNormal(durationMinutes, km) {
+  const hours = durationMinutes / 60;
+  const blocks = Math.ceil(durationMinutes / 15);
+  const raw = blocks * RATE_15MIN;
+  const cap = timeCapFor(hours);
+  const timeCost = Math.min(raw, cap);
+  const distFee = Math.max(0, km - FREE_KM_NORMAL) * DISTANCE_RATE;
+  return {
+    total: timeCost + distFee,
+    timeCost,
+    distFee,
+    capped: raw > cap,
+  };
+}
+
+function calcNight(startDateStr, durationMinutes, km) {
+  if (!startDateStr) return { eligible: false, reason: '出発時刻を入力してください' };
+  const start = new Date(startDateStr);
+  const hour = start.getHours();
+  const eligible = hour >= 18 || hour < 9;
+  if (!eligible) {
+    return { eligible: false, reason: '出発が18:00〜翌9:00の範囲外のため利用不可' };
+  }
+
+  const boundary = new Date(start);
+  if (hour >= 18) {
+    boundary.setDate(boundary.getDate() + 1);
+    boundary.setHours(9, 0, 0, 0);
+  } else {
+    boundary.setHours(9, 0, 0, 0);
+  }
+
+  const end = new Date(start.getTime() + durationMinutes * 60000);
+  let extCost = 0;
+  let overMax = false;
+  if (end > boundary) {
+    const extMin = (end - boundary) / 60000;
+    overMax = extMin > NIGHT_PACK_MAX_EXT_MIN;
+    const cappedExtMin = Math.min(extMin, NIGHT_PACK_MAX_EXT_MIN);
+    const blocks = Math.ceil(cappedExtMin / 15);
+    extCost = blocks * RATE_15MIN;
+  }
+  const distFee = km * DISTANCE_RATE;
+  return {
+    eligible: true,
+    total: NIGHT_PACK_PRICE + extCost + distFee,
+    packCost: NIGHT_PACK_PRICE,
+    extCost,
+    distFee,
+    overMax,
+  };
+}
+
+function render() {
+  const startVal = document.getElementById('startTime').value;
+  const h = Number(document.getElementById('durHours').value) || 0;
+  const m = Number(document.getElementById('durMinutes').value) || 0;
+  const durationMinutes = h * 60 + m;
+  const km = Number(document.getElementById('distance').value) || 0;
+
+  const normal = calcNormal(durationMinutes, km);
+  const night = calcNight(startVal, durationMinutes, km);
+
+  const resultsEl = document.getElementById('results');
+  const diffEl = document.getElementById('diffBanner');
+
+  let normalWins = false;
+  let nightWins = false;
+  if (night.eligible) {
+    if (normal.total < night.total) normalWins = true;
+    else if (night.total < normal.total) nightWins = true;
+  }
+
+  let normalHtml = `
+    <div class="result-card ${normalWins ? 'winner' : ''}">
+      ${normalWins ? '<span class="winner-tag">お得</span>' : ''}
+      <div class="plan-name">通常(時間料金)</div>
+      <div class="price">${yen(normal.total)}</div>
+      <div class="breakdown">
+        <span>時間料金: ${yen(normal.timeCost)}${normal.capped ? '(上限適用)' : ''}</span>
+        <span>距離料金: ${yen(normal.distFee)}</span>
+      </div>
+    </div>
+  `;
+
+  let nightHtml;
+  if (!night.eligible) {
+    nightHtml = `
+      <div class="result-card">
+        <div class="plan-name">深夜パック</div>
+        <div class="price" style="font-size:16px; color:#a09789;">利用不可</div>
+        <div class="disabled-note">${night.reason}</div>
+      </div>
+    `;
+  } else {
+    nightHtml = `
+      <div class="result-card ${nightWins ? 'winner' : ''}">
+        ${nightWins ? '<span class="winner-tag">お得</span>' : ''}
+        <div class="plan-name">深夜パック</div>
+        <div class="price">${yen(night.total)}</div>
+        <div class="breakdown">
+          <span>パック料金: ${yen(night.packCost)}</span>
+          ${night.extCost > 0 ? `<span>延長料金: ${yen(night.extCost)}</span>` : ''}
+          <span>距離料金: ${yen(night.distFee)}</span>
+          ${night.overMax ? '<span style="color:#c94a08;">⚠ 延長上限(6時間)を超えています</span>' : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  resultsEl.innerHTML = normalHtml + nightHtml;
+
+  if (night.eligible) {
+    const diff = Math.abs(normal.total - night.total);
+    if (diff === 0) {
+      diffEl.innerHTML = `<div class="diff-banner">どちらも同額です(${yen(normal.total)})</div>`;
+    } else {
+      const cheaper = normalWins ? '通常(時間料金)' : '深夜パック';
+      diffEl.innerHTML = `<div class="diff-banner">${cheaper}の方が ${yen(diff)} お得です</div>`;
+    }
+  } else {
+    diffEl.innerHTML = '';
+  }
+}
+
+// 出発地: タイムズ九条駅前(実際の利用明細で確認済みのステーション付近)を固定の起点とする
+const ORIGIN = { lat: 34.6762706, lon: 135.4736687 };
+const GEOCODE_HEADERS = { 'Accept-Language': 'ja' };
+
+async function nominatimSearch(q) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=jp&q=${encodeURIComponent(q)}`;
+  const res = await fetch(url, { headers: GEOCODE_HEADERS });
+  if (!res.ok) throw new Error('地名検索に失敗しました');
+  const data = await res.json();
+  return data[0] || null;
+}
+
+async function geocode(placeName) {
+  let result = await nominatimSearch(placeName);
+
+  // 「難波」→「大阪市」のように市区町村など広域行政区分にしか一致しなかった場合は、
+  // 「駅」を付けて再検索し、より具体的な地点に解決を試みる
+  const isTooCoarse = result && result.class === 'boundary' && result.type === 'administrative';
+  if (isTooCoarse && !placeName.endsWith('駅')) {
+    const retry = await nominatimSearch(placeName + '駅');
+    if (retry) result = retry;
+  }
+
+  if (!result) throw new Error('場所が見つかりませんでした');
+  return { lat: Number(result.lat), lon: Number(result.lon), name: result.display_name };
+}
+
+async function routeDistanceKm(from, to) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('ルート検索に失敗しました');
+  const data = await res.json();
+  if (data.code !== 'Ok' || !data.routes?.length) throw new Error('ルートが見つかりませんでした');
+  return data.routes[0].distance / 1000;
+}
+
+async function calcDistanceFromDestination() {
+  const input = document.getElementById('destination');
+  const btn = document.getElementById('calcDistanceBtn');
+  const status = document.getElementById('destinationStatus');
+  const placeName = input.value.trim();
+
+  if (!placeName) {
+    status.textContent = '行き先を入力してください。';
+    status.className = 'hint error';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = '計算中...';
+  status.className = 'hint';
+
+  try {
+    const dest = await geocode(placeName);
+    const oneWayKm = await routeDistanceKm(ORIGIN, dest);
+    const roundTripKm = Math.round(oneWayKm * 2);
+    document.getElementById('distance').value = roundTripKm;
+    status.textContent = `九条駅前 → ${dest.name.split('、')[0].split(',')[0]}: 片道約${oneWayKm.toFixed(1)}km(往復${roundTripKm}kmを自動入力しました)`;
+    status.className = 'hint success';
+    render();
+  } catch (e) {
+    status.textContent = `計算できませんでした: ${e.message}(手動で入力してください)`;
+    status.className = 'hint error';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('calcDistanceBtn').addEventListener('click', calcDistanceFromDestination);
+document.getElementById('destination').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    calcDistanceFromDestination();
+  }
+});
+
+function setDefaultStartTime() {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  if (now.getHours() < 18) now.setHours(18);
+  const pad = (n) => String(n).padStart(2, '0');
+  const val = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  document.getElementById('startTime').value = val;
+}
+
+document.getElementById('startTime').addEventListener('input', render);
+document.getElementById('durHours').addEventListener('input', render);
+document.getElementById('durMinutes').addEventListener('input', render);
+document.getElementById('distance').addEventListener('input', render);
+
+setDefaultStartTime();
+render();
+</script>
+</body>
+</html>
