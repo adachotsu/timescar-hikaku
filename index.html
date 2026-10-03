@@ -145,6 +145,7 @@
     z-index: 0;
   }
   .dest-map[hidden] { display: none; }
+  .dest-pin { background: none; border: none; }
   .segmented {
     display: flex;
     gap: 6px;
@@ -568,6 +569,16 @@ const destMap = {
   routeLine: null,
 };
 
+// 行き先は Google マップ風の赤いピンで表示する
+const DEST_PIN_ICON = typeof L === 'undefined' ? null : L.divIcon({
+  className: 'dest-pin',
+  html: '<svg viewBox="0 0 27 43" width="27" height="43" aria-hidden="true">'
+    + '<path d="M13.5 0C6 0 0 6 0 13.5 0 23.6 13.5 43 13.5 43S27 23.6 27 13.5C27 6 21 0 13.5 0z" fill="#ea4335" stroke="#a52714" stroke-width="1"/>'
+    + '<circle cx="13.5" cy="13.5" r="5" fill="#a52714"/></svg>',
+  iconSize: [27, 43],
+  iconAnchor: [13.5, 43],
+});
+
 function mapClickMode() {
   const checked = document.querySelector('input[name="mapMode"]:checked');
   return checked ? checked.value : 'destination';
@@ -581,9 +592,11 @@ function initDestinationMap() {
   document.getElementById('mapMode').hidden = false;
 
   const map = L.map(el, { scrollWheelZoom: false, tap: true }).setView([origin.lat, origin.lon], 12);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  // Google マップに近い配色の CARTO Voyager タイル(API キー不要)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    subdomains: 'abcd',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
   }).addTo(map);
   destMap.originMarker = L.circleMarker([origin.lat, origin.lon], {
     radius: 8, color: '#fff', weight: 2, fillColor: '#e8580c', fillOpacity: 1,
@@ -610,14 +623,14 @@ function showDestinationOnMap(dest, latLngs) {
   if (!destMap.map) return;
   const latLng = [dest.lat, dest.lon];
   if (destMap.marker) destMap.marker.setLatLng(latLng);
-  else destMap.marker = L.marker(latLng).addTo(destMap.map);
+  else destMap.marker = L.marker(latLng, { icon: DEST_PIN_ICON }).addTo(destMap.map);
 
   if (destMap.routeLine) destMap.routeLine.remove();
   destMap.routeLine = null;
   // ルートが無い(タップ直後で計算中)ときは、地図の表示位置を動かさない
   if (!latLngs?.length) return;
 
-  destMap.routeLine = L.polyline(latLngs, { color: '#e8580c', weight: 4, opacity: 0.75 }).addTo(destMap.map);
+  destMap.routeLine = L.polyline(latLngs, { color: '#4285f4', weight: 5, opacity: 0.85 }).addTo(destMap.map);
   destMap.map.fitBounds(destMap.routeLine.getBounds(), { padding: [24, 24], maxZoom: 15 });
 }
 
