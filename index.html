@@ -592,11 +592,11 @@ function initDestinationMap() {
   document.getElementById('mapMode').hidden = false;
 
   const map = L.map(el, { scrollWheelZoom: false, tap: true }).setView([origin.lat, origin.lon], 12);
-  // Google マップに近い配色の CARTO Voyager タイル(API キー不要)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-    maxZoom: 19,
-    subdomains: 'abcd',
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  // Google マップに近い淡い配色の国土地理院「淡色地図」(API キー不要、日本国内のみ)
+  L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+    minZoom: 5,
+    maxZoom: 18,
+    attribution: '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>',
   }).addTo(map);
   destMap.originMarker = L.circleMarker([origin.lat, origin.lon], {
     radius: 8, color: '#fff', weight: 2, fillColor: '#e8580c', fillOpacity: 1,
