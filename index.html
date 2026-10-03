@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>タイムズカー 深夜パック vs 時間料金 比較</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
   :root {
     --text: #3f3a36;
@@ -135,6 +136,15 @@
     opacity: 0.6;
     cursor: default;
   }
+  .dest-map {
+    height: 260px;
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    z-index: 0;
+  }
+  .dest-map[hidden] { display: none; }
   #destinationStatus.error { color: #b3261e; }
   #destinationStatus.success { color: var(--win); }
   .duration-inputs {
@@ -264,12 +274,13 @@
     </div>
 
     <div class="field">
-      <label for="destination">行き先(場所名で距離を自動計算)</label>
+      <label for="destination">行き先(場所名か地図で距離を自動計算)</label>
       <div class="destination-row">
         <input type="text" id="destination" placeholder="例: 難波、USJ、梅田駅" inputmode="text">
         <button type="button" id="calcDistanceBtn" class="primary">計算</button>
       </div>
-      <div class="hint" id="destinationStatus">九条駅前を出発地として、往復のおおよその走行距離を自動入力します(OpenStreetMapのルート検索を利用)。</div>
+      <div id="destMap" class="dest-map" hidden></div>
+      <div class="hint" id="destinationStatus">九条駅前を出発地として、往復のおおよその走行距離を自動入力します(OpenStreetMapのルート検索を利用)。地図をタップして行き先を選ぶこともできます。</div>
     </div>
 
     <div class="field">
@@ -293,6 +304,7 @@
   </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 const RATE_15MIN = 220;
 const DISTANCE_RATE = 20;
@@ -474,13 +486,116 @@ async function geocode(placeName) {
   return { lat: Number(result.lat), lon: Number(result.lon), name: result.display_name };
 }
 
-async function routeDistanceKm(from, to) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+async function reverseGeocodeName(point) {
+  const url = `https://nominatim.openstreetmap.org/reverse?format=json&zoom=17&lat=${point.lat}&lon=${point.lon}`;
+  const res = await fetch(url, { headers: GEOCODE_HEADERS });
+  if (!res.ok) throw new Error('地名の取得に失敗しました');
+  const data = await res.json();
+  if (!data || data.error) throw new Error('地名が見つかりませんでした');
+  return data.name || (data.display_name || '').split(',')[0].trim();
+}
+
+async function fetchRoute(from, to) {
+  const url = `https://router.project-osrm.org/route/v1/driving/${from.lon},${from.lat};${to.lon},${to.lat}?overview=simplified&geometries=geojson`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('ルート検索に失敗しました');
   const data = await res.json();
   if (data.code !== 'Ok' || !data.routes?.length) throw new Error('ルートが見つかりませんでした');
-  return data.routes[0].distance / 1000;
+  const route = data.routes[0];
+  return {
+    km: route.distance / 1000,
+    // GeoJSONは[lon, lat]順なのでLeaflet用に[lat, lon]へ並べ替える
+    latLngs: route.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
+  };
+}
+
+// ---- 行き先選択用の地図(Leaflet + OpenStreetMap) ----
+const destMap = {
+  map: null,
+  marker: null,
+  routeLine: null,
+};
+
+function initDestinationMap() {
+  const el = document.getElementById('destMap');
+  // CDNの読み込みに失敗した場合は地図なしで従来どおり場所名入力だけを使う
+  if (typeof L === 'undefined') return;
+  el.hidden = false;
+
+  const map = L.map(el, { scrollWheelZoom: false, tap: true }).setView([ORIGIN.lat, ORIGIN.lon], 12);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  }).addTo(map);
+  L.circleMarker([ORIGIN.lat, ORIGIN.lon], {
+    radius: 8, color: '#fff', weight: 2, fillColor: '#e8580c', fillOpacity: 1,
+  }).addTo(map).bindTooltip('出発: タイムズ九条駅前');
+
+  map.on('click', (e) => {
+    setDestinationFromMap({ lat: e.latlng.lat, lon: e.latlng.lng });
+  });
+
+  destMap.map = map;
+}
+
+function showDestinationOnMap(dest, latLngs) {
+  if (!destMap.map) return;
+  const latLng = [dest.lat, dest.lon];
+  if (destMap.marker) destMap.marker.setLatLng(latLng);
+  else destMap.marker = L.marker(latLng).addTo(destMap.map);
+
+  if (destMap.routeLine) destMap.routeLine.remove();
+  destMap.routeLine = null;
+  // ルートが無い(タップ直後で計算中)ときは、地図の表示位置を動かさない
+  if (!latLngs?.length) return;
+
+  destMap.routeLine = L.polyline(latLngs, { color: '#e8580c', weight: 4, opacity: 0.75 }).addTo(destMap.map);
+  destMap.map.fitBounds(destMap.routeLine.getBounds(), { padding: [24, 24], maxZoom: 15 });
+}
+
+// 連続して行き先を変えたときに、古いリクエストの結果で上書きしないための通し番号
+let destinationRequestId = 0;
+const isCurrentRequest = (id) => id === destinationRequestId;
+
+async function applyDestination(requestId, dest, label) {
+  const route = await fetchRoute(ORIGIN, dest);
+  if (!isCurrentRequest(requestId)) return;
+
+  const roundTripKm = Math.round(route.km * 2);
+  document.getElementById('distance').value = roundTripKm;
+  showDestinationOnMap(dest, route.latLngs);
+  const status = document.getElementById('destinationStatus');
+  status.textContent = `九条駅前 → ${label}: 片道約${route.km.toFixed(1)}km(往復${roundTripKm}kmを自動入力しました)`;
+  status.className = 'hint success';
+  render();
+}
+
+function showDestinationError(requestId, e) {
+  if (!isCurrentRequest(requestId)) return;
+  const status = document.getElementById('destinationStatus');
+  status.textContent = `計算できませんでした: ${e.message}(手動で入力してください)`;
+  status.className = 'hint error';
+}
+
+async function setDestinationFromMap(point) {
+  const requestId = ++destinationRequestId;
+  const status = document.getElementById('destinationStatus');
+  status.textContent = '計算中...';
+  status.className = 'hint';
+  showDestinationOnMap(point, null);
+
+  try {
+    // 地名は表示用なので、取得できなくても距離計算は続ける
+    const [name] = await Promise.all([
+      reverseGeocodeName(point).catch(() => null),
+      applyDestination(requestId, point, '地図で選んだ地点'),
+    ]);
+    if (!isCurrentRequest(requestId) || !name) return;
+    document.getElementById('destination').value = name;
+    status.textContent = status.textContent.replace('地図で選んだ地点', name);
+  } catch (e) {
+    showDestinationError(requestId, e);
+  }
 }
 
 async function calcDistanceFromDestination() {
@@ -499,17 +614,13 @@ async function calcDistanceFromDestination() {
   status.textContent = '計算中...';
   status.className = 'hint';
 
+  const requestId = ++destinationRequestId;
   try {
     const dest = await geocode(placeName);
-    const oneWayKm = await routeDistanceKm(ORIGIN, dest);
-    const roundTripKm = Math.round(oneWayKm * 2);
-    document.getElementById('distance').value = roundTripKm;
-    status.textContent = `九条駅前 → ${dest.name.split('、')[0].split(',')[0]}: 片道約${oneWayKm.toFixed(1)}km(往復${roundTripKm}kmを自動入力しました)`;
-    status.className = 'hint success';
-    render();
+    if (!isCurrentRequest(requestId)) return;
+    await applyDestination(requestId, dest, dest.name.split('、')[0].split(',')[0]);
   } catch (e) {
-    status.textContent = `計算できませんでした: ${e.message}(手動で入力してください)`;
-    status.className = 'hint error';
+    showDestinationError(requestId, e);
   } finally {
     btn.disabled = false;
   }
@@ -539,6 +650,7 @@ document.getElementById('distance').addEventListener('input', render);
 
 setDefaultStartTime();
 render();
+initDestinationMap();
 </script>
 </body>
 </html>
