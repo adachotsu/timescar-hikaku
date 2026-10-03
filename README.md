@@ -20,3 +20,10 @@
 ## ローカルでの実行
 
 `index.html` をブラウザで直接開くだけで動作します。ビルドや依存パッケージのインストールは不要です。
+
+## 公開URL(GitHub Pages)
+
+`main` に push すると GitHub Actions で自動的に GitHub Pages へデプロイされます。
+
+- URL: https://adachotsu.github.io/timescar-hikaku/
+- 初回のみ: リポジトリの Settings → Pages → Build and deployment の Source を「GitHub Actions」に設定してください。
