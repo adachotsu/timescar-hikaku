@@ -555,70 +555,182 @@ async function fetchRoute(from, to) {
   const route = data.routes[0];
   return {
     km: route.distance / 1000,
-    // GeoJSONは[lon, lat]順なのでLeaflet用に[lat, lon]へ並べ替える
+    // GeoJSONは[lon, lat]順なので地図表示用に[lat, lon]へ並べ替える
     latLngs: route.geometry.coordinates.map(([lon, lat]) => [lat, lon]),
   };
 }
 
-// ---- 行き先選択用の地図(Leaflet + OpenStreetMap) ----
-const destMap = {
-  map: null,
-  marker: null,
-  originMarker: null,
-  routeLine: null,
-};
+// ---- 行き先選択用の地図 ----
+// Google マップの API キー。ページのソースから誰でも見えるため、Google Cloud 側で
+// 「HTTP リファラー: https://adachotsu.github.io/*」「Maps JavaScript API のみ」に制限して使う。
+// 空のとき・読み込みや認証に失敗したときは Leaflet + OpenStreetMap の地図で表示する。
+const GOOGLE_MAPS_API_KEY = '';
+const ROUTE_COLOR = '#e8580c';
+
+// 地図ごとの違いはこのオブジェクトの中だけに閉じ込める
+// (setOrigin / setDestination を持つ。地図が無いときは null)
+let destMap = null;
 
 function mapClickMode() {
   const checked = document.querySelector('input[name="mapMode"]:checked');
   return checked ? checked.value : 'destination';
 }
 
-function initDestinationMap() {
-  const el = document.getElementById('destMap');
-  // CDNの読み込みに失敗した場合は地図なしで従来どおり場所名入力だけを使う
-  if (typeof L === 'undefined') return;
-  el.hidden = false;
-  document.getElementById('mapMode').hidden = false;
+function onMapClick(point) {
+  if (mapClickMode() === 'origin') setOriginFromMap(point);
+  else setDestinationFromMap(point);
+}
 
+function showMapElements() {
+  document.getElementById('destMap').hidden = false;
+  document.getElementById('mapMode').hidden = false;
+}
+
+function createGoogleMap(el) {
+  const g = google.maps;
+  const map = new g.Map(el, {
+    center: { lat: origin.lat, lng: origin.lon },
+    zoom: 12,
+    gestureHandling: 'cooperative',
+    clickableIcons: false,
+    mapTypeControl: false,
+    streetViewControl: false,
+    fullscreenControl: false,
+  });
+  const originMarker = new g.Marker({
+    map,
+    position: { lat: origin.lat, lng: origin.lon },
+    title: `出発: ${origin.name}`,
+    icon: {
+      path: g.SymbolPath.CIRCLE, scale: 8,
+      fillColor: ROUTE_COLOR, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 2,
+    },
+  });
+  let marker = null;
+  let routeLine = null;
+
+  map.addListener('click', (e) => onMapClick({ lat: e.latLng.lat(), lon: e.latLng.lng() }));
+
+  return {
+    setOrigin() {
+      originMarker.setPosition({ lat: origin.lat, lng: origin.lon });
+      originMarker.setTitle(`出発: ${origin.name}`);
+      if (!lastDestination) map.panTo({ lat: origin.lat, lng: origin.lon });
+    },
+    setDestination(dest, latLngs) {
+      const position = { lat: dest.lat, lng: dest.lon };
+      if (marker) marker.setPosition(position);
+      else marker = new g.Marker({ map, position });
+
+      if (routeLine) routeLine.setMap(null);
+      routeLine = null;
+      if (!latLngs?.length) return;
+
+      const path = latLngs.map(([lat, lng]) => ({ lat, lng }));
+      routeLine = new g.Polyline({ map, path, strokeColor: ROUTE_COLOR, strokeWeight: 4, strokeOpacity: 0.75 });
+      const bounds = new g.LatLngBounds();
+      path.forEach((p) => bounds.extend(p));
+      map.fitBounds(bounds, 24);
+      g.event.addListenerOnce(map, 'idle', () => {
+        if (map.getZoom() > 15) map.setZoom(15);
+      });
+    },
+  };
+}
+
+function createLeafletMap(el) {
   const map = L.map(el, { scrollWheelZoom: false, tap: true }).setView([origin.lat, origin.lon], 12);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
-  destMap.originMarker = L.circleMarker([origin.lat, origin.lon], {
-    radius: 8, color: '#fff', weight: 2, fillColor: '#e8580c', fillOpacity: 1,
+  const originMarker = L.circleMarker([origin.lat, origin.lon], {
+    radius: 8, color: '#fff', weight: 2, fillColor: ROUTE_COLOR, fillOpacity: 1,
   }).addTo(map).bindTooltip(`出発: ${origin.name}`);
+  let marker = null;
+  let routeLine = null;
 
-  map.on('click', (e) => {
-    const point = { lat: e.latlng.lat, lon: e.latlng.lng };
-    if (mapClickMode() === 'origin') setOriginFromMap(point);
-    else setDestinationFromMap(point);
-  });
+  map.on('click', (e) => onMapClick({ lat: e.latlng.lat, lon: e.latlng.lng }));
 
-  destMap.map = map;
+  return {
+    setOrigin() {
+      originMarker.setLatLng([origin.lat, origin.lon]);
+      originMarker.setTooltipContent(`出発: ${origin.name}`);
+      // 行き先が無いときは出発地を中心に表示する(行き先があればルート全体に合わせる)
+      if (!lastDestination) map.panTo([origin.lat, origin.lon]);
+    },
+    setDestination(dest, latLngs) {
+      const latLng = [dest.lat, dest.lon];
+      if (marker) marker.setLatLng(latLng);
+      else marker = L.marker(latLng).addTo(map);
+
+      if (routeLine) routeLine.remove();
+      routeLine = null;
+      // ルートが無い(タップ直後で計算中)ときは、地図の表示位置を動かさない
+      if (!latLngs?.length) return;
+
+      routeLine = L.polyline(latLngs, { color: ROUTE_COLOR, weight: 4, opacity: 0.75 }).addTo(map);
+      map.fitBounds(routeLine.getBounds(), { padding: [24, 24], maxZoom: 15 });
+    },
+  };
+}
+
+// 地図を作ったあと、作る前に選ばれていた行き先(ルート)も描き直す
+let lastRouteLatLngs = null;
+function installMap(createMap) {
+  const el = document.getElementById('destMap');
+  el.replaceChildren();
+  showMapElements();
+  destMap = createMap(el);
+  if (lastDestination) {
+    destMap.setDestination({ lat: lastDestination.point.lat, lon: lastDestination.point.lon }, lastRouteLatLngs);
+  }
+}
+
+let usingLeaflet = false;
+function initLeafletMap() {
+  if (usingLeaflet) return;
+  // CDNの読み込みに失敗した場合は地図なしで従来どおり場所名入力だけを使う
+  if (typeof L === 'undefined') {
+    destMap = null;
+    document.getElementById('destMap').hidden = true;
+    document.getElementById('mapMode').hidden = true;
+    return;
+  }
+  usingLeaflet = true;
+  installMap(createLeafletMap);
+}
+
+function initDestinationMap() {
+  if (!GOOGLE_MAPS_API_KEY) {
+    initLeafletMap();
+    return;
+  }
+  // キーが無効・リファラー制限外などで認証に失敗したら Google が呼ぶ
+  window.gm_authFailure = initLeafletMap;
+  window.onGoogleMapsLoaded = () => {
+    if (usingLeaflet) return;
+    try {
+      installMap(createGoogleMap);
+    } catch (e) {
+      initLeafletMap();
+    }
+  };
+  const script = document.createElement('script');
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(GOOGLE_MAPS_API_KEY)}`
+    + '&language=ja&region=JP&loading=async&callback=onGoogleMapsLoaded';
+  script.async = true;
+  script.onerror = initLeafletMap;
+  document.head.appendChild(script);
 }
 
 function showOriginOnMap() {
-  if (!destMap.map) return;
-  destMap.originMarker.setLatLng([origin.lat, origin.lon]);
-  destMap.originMarker.setTooltipContent(`出発: ${origin.name}`);
-  // 行き先が無いときは出発地を中心に表示する(行き先があればルート全体に合わせる)
-  if (!lastDestination) destMap.map.panTo([origin.lat, origin.lon]);
+  if (destMap) destMap.setOrigin();
 }
 
 function showDestinationOnMap(dest, latLngs) {
-  if (!destMap.map) return;
-  const latLng = [dest.lat, dest.lon];
-  if (destMap.marker) destMap.marker.setLatLng(latLng);
-  else destMap.marker = L.marker(latLng).addTo(destMap.map);
-
-  if (destMap.routeLine) destMap.routeLine.remove();
-  destMap.routeLine = null;
-  // ルートが無い(タップ直後で計算中)ときは、地図の表示位置を動かさない
-  if (!latLngs?.length) return;
-
-  destMap.routeLine = L.polyline(latLngs, { color: '#e8580c', weight: 4, opacity: 0.75 }).addTo(destMap.map);
-  destMap.map.fitBounds(destMap.routeLine.getBounds(), { padding: [24, 24], maxZoom: 15 });
+  lastRouteLatLngs = latLngs || null;
+  if (destMap) destMap.setDestination(dest, latLngs);
 }
 
 // 連続して行き先を変えたときに、古いリクエストの結果で上書きしないための通し番号
