@@ -145,6 +145,57 @@
     z-index: 0;
   }
   .dest-map[hidden] { display: none; }
+  .segmented {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .segmented label {
+    flex: 1 1 0;
+    min-width: 0;
+    margin: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-page);
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-h);
+  }
+  .segmented label small {
+    display: block;
+    font-weight: 400;
+    font-size: 11px;
+    color: #8a8378;
+  }
+  .segmented input:checked + label {
+    border-color: var(--accent);
+    background: var(--accent-bg);
+    color: var(--accent-h);
+  }
+  .segmented input:focus-visible + label {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .map-mode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 12.5px;
+  }
+  .map-mode[hidden] { display: none; }
+  .map-mode .segmented { flex: 1; }
+  .map-mode .segmented label { padding: 5px 8px; font-size: 12.5px; }
+  #originStatus.error { color: #b3261e; }
+  #originStatus.success { color: var(--win); }
   #destinationStatus.error { color: #b3261e; }
   #destinationStatus.success { color: var(--win); }
   .duration-inputs {
@@ -249,13 +300,35 @@
     <h1>タイムズカー 深夜パック vs 時間料金</h1>
     <p class="subtitle">出発時刻・利用時間・走行距離を入れると、深夜パックと通常の時間料金でどちらが安いか一目でわかります。</p>
     <div class="badge-row">
-      <span class="badge">📍 大阪 九条駅発着</span>
-      <span class="badge">🚗 ベーシッククラス</span>
+      <span class="badge">📍 <span id="originBadge">タイムズ九条駅前</span> 発着</span>
+      <span class="badge">🚗 <span id="classBadge">ベーシック</span>クラス</span>
     </div>
   </header>
 
   <div class="card">
     <h2>利用条件を入力</h2>
+
+    <div class="field">
+      <label>車両クラス</label>
+      <div class="segmented" id="classPicker" role="radiogroup" aria-label="車両クラス">
+        <input type="radio" name="carClass" id="class-basic" value="basic" checked>
+        <label for="class-basic">ベーシック<small>15分220円</small></label>
+        <input type="radio" name="carClass" id="class-middle" value="middle">
+        <label for="class-middle">ミドル<small>15分330円</small></label>
+        <input type="radio" name="carClass" id="class-premium" value="premium">
+        <label for="class-premium">プレミアム<small>15分440円</small></label>
+      </div>
+      <div class="hint" id="classHint"></div>
+    </div>
+
+    <div class="field">
+      <label for="origin">出発ステーション</label>
+      <div class="destination-row">
+        <input type="text" id="origin" value="タイムズ九条駅前" placeholder="例: タイムズ梅田駅前、心斎橋駅" inputmode="text">
+        <button type="button" id="setOriginBtn" class="primary">設定</button>
+      </div>
+      <div class="hint" id="originStatus">ステーション名や駅名で検索するか、下の地図で「出発地」を選んでタップしてください。行き先までの距離はここから計算します。</div>
+    </div>
 
     <div class="field">
       <label for="startTime">出発時刻</label>
@@ -280,7 +353,16 @@
         <button type="button" id="calcDistanceBtn" class="primary">計算</button>
       </div>
       <div id="destMap" class="dest-map" hidden></div>
-      <div class="hint" id="destinationStatus">九条駅前を出発地として、往復のおおよその走行距離を自動入力します(OpenStreetMapのルート検索を利用)。地図をタップして行き先を選ぶこともできます。</div>
+      <div class="map-mode" id="mapMode" hidden>
+        <span>地図タップで設定:</span>
+        <div class="segmented" role="radiogroup" aria-label="地図タップで設定する地点">
+          <input type="radio" name="mapMode" id="mapMode-dest" value="destination" checked>
+          <label for="mapMode-dest">行き先</label>
+          <input type="radio" name="mapMode" id="mapMode-origin" value="origin">
+          <label for="mapMode-origin">出発地</label>
+        </div>
+      </div>
+      <div class="hint" id="destinationStatus">出発ステーションからの往復のおおよその走行距離を自動入力します(OpenStreetMapのルート検索を利用)。地図をタップして行き先を選ぶこともできます。</div>
     </div>
 
     <div class="field">
@@ -298,8 +380,10 @@
 
   <div class="caveat">
     <strong>この計算について</strong><br>
-    タイムズカーシェア公式サイトの公開料金(ベーシッククラス:15分220円/6時間上限4,290円/12時間上限5,500円/24時間上限6,600円/36時間上限8,800円/48時間上限9,900円/72時間上限14,300円/以降1日毎5,500円、深夜パック2,640円・18:00〜翌9:00・延長6時間まで15分220円(最大時間料金なし)、延長上限を超えた分は返却遅延料金15分440円、距離料金20円/km)をもとに計算しています。<br><br>
-    実際の九条エリア(タイムズ九条駅前第6・タイムズ九条第4)での利用明細4件と照合済みで、通常料金・深夜パックとも完全に一致することを確認しています。特に6時間上限が発動するケース(5時間39分利用で上限の4,290円に丸められる例)でも一致を確認できたため、上限の積み上がり方についても実データで裏付けが取れています。<br><br>
+    <a href="https://share.timescar.jp/fare/use.html" target="_blank" rel="noopener">タイムズカーシェア公式サイトの公開料金</a>(2026年10月時点)をもとに、選んだクラスの料金で計算しています。<br>
+    <span id="rateSummary"></span><br>
+    深夜パックは18:00〜翌9:00出発で、パック終了後は最大6時間までクラスの15分料金で延長(最大時間料金なし)、6時間を超えた分は返却遅延料金(通常の2倍)として計算します。距離料金は全クラス共通で20円/km(通常は20kmまで無料、深夜パックは0kmから加算)です。<br><br>
+    ベーシッククラスについては、実際の九条エリア(タイムズ九条駅前第6・タイムズ九条第4)での利用明細4件と照合済みで、通常料金・深夜パックとも完全に一致することを確認しています。特に6時間上限が発動するケース(5時間39分利用で上限の4,290円に丸められる例)でも一致を確認できたため、上限の積み上がり方についても実データで裏付けが取れています。<br><br>
     ただし「距離料金ステージ割引」「カーシェアeチケット割引」など、会員ステージや保有チケットに応じた個人単位の割引はこの計算に含まれていません。実際の請求額はそうした割引分だけ、ここでの表示額より安くなる場合があります。
   </div>
 </div>
@@ -311,15 +395,52 @@ function yen(n) {
   return '¥' + Math.round(n).toLocaleString('ja-JP');
 }
 
+// 選択状態はブラウザに保存して次回も引き継ぐ(保存できない環境でも動くよう例外は無視する)
+const STORAGE_KEY = 'timescar-hikaku:settings';
+function loadSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+function saveSettings(patch) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...loadSettings(), ...patch }));
+  } catch {
+    // 保存できなくても計算には影響しない
+  }
+}
+
+function selectedClassId() {
+  const checked = document.querySelector('input[name="carClass"]:checked');
+  return checked ? checked.value : DEFAULT_CLASS;
+}
+
+function rateSummaryText(cls) {
+  const caps = cls.caps.map((c) => `${c.hours}時間上限${c.price.toLocaleString('ja-JP')}円`).join('/');
+  return `${cls.label}クラス: 15分${cls.rate15min}円/${caps}/以降1日毎${cls.extraDay.toLocaleString('ja-JP')}円、深夜パック${cls.nightPack.toLocaleString('ja-JP')}円`;
+}
+
+function renderClassInfo(cls) {
+  document.getElementById('classBadge').textContent = cls.label;
+  document.getElementById('classHint').textContent =
+    `6時間上限${cls.caps[0].price.toLocaleString('ja-JP')}円/深夜パック${cls.nightPack.toLocaleString('ja-JP')}円`;
+  document.getElementById('rateSummary').textContent = rateSummaryText(cls);
+}
+
 function render() {
+  const classId = selectedClassId();
+  const cls = CAR_CLASSES[classId];
+  renderClassInfo(cls);
   const startVal = document.getElementById('startTime').value;
   const h = Number(document.getElementById('durHours').value) || 0;
   const m = Number(document.getElementById('durMinutes').value) || 0;
   const durationMinutes = h * 60 + m;
   const km = Number(document.getElementById('distance').value) || 0;
 
-  const normal = calcNormal(durationMinutes, km);
-  const night = calcNight(startVal, durationMinutes, km);
+  const normal = calcNormal(durationMinutes, km, classId);
+  const night = calcNight(startVal, durationMinutes, km, classId);
 
   const resultsEl = document.getElementById('results');
   const diffEl = document.getElementById('diffBanner');
@@ -363,7 +484,7 @@ function render() {
           ${night.extCost > 0 ? `<span>延長料金: ${yen(night.extCost)}</span>` : ''}
           ${night.lateCost > 0 ? `<span>返却遅延料金: ${yen(night.lateCost)}</span>` : ''}
           <span>距離料金: ${yen(night.distFee)}</span>
-          ${night.overMax ? '<span style="color:#c94a08;">⚠ 延長上限(6時間)を超えるため予約できません。超過分は返却遅延料金(15分440円)で計算しています</span>' : ''}
+          ${night.overMax ? `<span style="color:#c94a08;">⚠ 延長上限(6時間)を超えるため予約できません。超過分は返却遅延料金(15分${cls.rate15min * LATE_RATE_MULTIPLIER}円)で計算しています</span>` : ''}
         </div>
       </div>
     `;
@@ -384,8 +505,13 @@ function render() {
   }
 }
 
-// 出発地: タイムズ九条駅前(実際の利用明細で確認済みのステーション付近)を固定の起点とする
-const ORIGIN = { lat: 34.6762706, lon: 135.4736687 };
+// 出発地の初期値: タイムズ九条駅前(実際の利用明細で確認済みのステーション付近)
+const DEFAULT_ORIGIN = { lat: 34.6762706, lon: 135.4736687, name: 'タイムズ九条駅前' };
+let origin = { ...DEFAULT_ORIGIN };
+// 出発地を変えたときに距離を計算し直すため、最後に選んだ行き先を覚えておく
+let lastDestination = null;
+
+const shortPlaceName = (displayName) => displayName.split('、')[0].split(',')[0].trim();
 const GEOCODE_HEADERS = { 'Accept-Language': 'ja' };
 
 async function nominatimSearch(q) {
@@ -438,29 +564,46 @@ async function fetchRoute(from, to) {
 const destMap = {
   map: null,
   marker: null,
+  originMarker: null,
   routeLine: null,
 };
+
+function mapClickMode() {
+  const checked = document.querySelector('input[name="mapMode"]:checked');
+  return checked ? checked.value : 'destination';
+}
 
 function initDestinationMap() {
   const el = document.getElementById('destMap');
   // CDNの読み込みに失敗した場合は地図なしで従来どおり場所名入力だけを使う
   if (typeof L === 'undefined') return;
   el.hidden = false;
+  document.getElementById('mapMode').hidden = false;
 
-  const map = L.map(el, { scrollWheelZoom: false, tap: true }).setView([ORIGIN.lat, ORIGIN.lon], 12);
+  const map = L.map(el, { scrollWheelZoom: false, tap: true }).setView([origin.lat, origin.lon], 12);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
-  L.circleMarker([ORIGIN.lat, ORIGIN.lon], {
+  destMap.originMarker = L.circleMarker([origin.lat, origin.lon], {
     radius: 8, color: '#fff', weight: 2, fillColor: '#e8580c', fillOpacity: 1,
-  }).addTo(map).bindTooltip('出発: タイムズ九条駅前');
+  }).addTo(map).bindTooltip(`出発: ${origin.name}`);
 
   map.on('click', (e) => {
-    setDestinationFromMap({ lat: e.latlng.lat, lon: e.latlng.lng });
+    const point = { lat: e.latlng.lat, lon: e.latlng.lng };
+    if (mapClickMode() === 'origin') setOriginFromMap(point);
+    else setDestinationFromMap(point);
   });
 
   destMap.map = map;
+}
+
+function showOriginOnMap() {
+  if (!destMap.map) return;
+  destMap.originMarker.setLatLng([origin.lat, origin.lon]);
+  destMap.originMarker.setTooltipContent(`出発: ${origin.name}`);
+  // 行き先が無いときは出発地を中心に表示する(行き先があればルート全体に合わせる)
+  if (!lastDestination) destMap.map.panTo([origin.lat, origin.lon]);
 }
 
 function showDestinationOnMap(dest, latLngs) {
@@ -483,14 +626,15 @@ let destinationRequestId = 0;
 const isCurrentRequest = (id) => id === destinationRequestId;
 
 async function applyDestination(requestId, dest, label) {
-  const route = await fetchRoute(ORIGIN, dest);
+  const route = await fetchRoute(origin, dest);
   if (!isCurrentRequest(requestId)) return;
+  lastDestination = { point: { lat: dest.lat, lon: dest.lon }, label };
 
   const roundTripKm = Math.round(route.km * 2);
   document.getElementById('distance').value = roundTripKm;
   showDestinationOnMap(dest, route.latLngs);
   const status = document.getElementById('destinationStatus');
-  status.textContent = `九条駅前 → ${label}: 片道約${route.km.toFixed(1)}km(往復${roundTripKm}kmを自動入力しました)`;
+  status.textContent = `${origin.name} → ${label}: 片道約${route.km.toFixed(1)}km(往復${roundTripKm}kmを自動入力しました)`;
   status.className = 'hint success';
   render();
 }
@@ -517,6 +661,7 @@ async function setDestinationFromMap(point) {
     ]);
     if (!isCurrentRequest(requestId) || !name) return;
     document.getElementById('destination').value = name;
+    if (lastDestination) lastDestination.label = name;
     status.textContent = status.textContent.replace('地図で選んだ地点', name);
   } catch (e) {
     showDestinationError(requestId, e);
@@ -543,12 +688,107 @@ async function calcDistanceFromDestination() {
   try {
     const dest = await geocode(placeName);
     if (!isCurrentRequest(requestId)) return;
-    await applyDestination(requestId, dest, dest.name.split('、')[0].split(',')[0]);
+    await applyDestination(requestId, dest, shortPlaceName(dest.name));
   } catch (e) {
     showDestinationError(requestId, e);
   } finally {
     btn.disabled = false;
   }
+}
+
+// ---- 出発ステーションの選択 ----
+let originRequestId = 0;
+
+function setOriginStatus(text, kind) {
+  const status = document.getElementById('originStatus');
+  status.textContent = text;
+  status.className = kind ? `hint ${kind}` : 'hint';
+}
+
+// 出発地を確定し、行き先が選ばれていればその出発地から距離を計算し直す
+async function applyOrigin(point, name) {
+  origin = { lat: point.lat, lon: point.lon, name };
+  document.getElementById('origin').value = name;
+  document.getElementById('originBadge').textContent = name;
+  showOriginOnMap();
+  saveSettings({ origin });
+  setOriginStatus(`出発地を「${name}」に設定しました。`, 'success');
+
+  if (!lastDestination) return;
+  const requestId = ++destinationRequestId;
+  const status = document.getElementById('destinationStatus');
+  status.textContent = '新しい出発地から再計算中...';
+  status.className = 'hint';
+  try {
+    await applyDestination(requestId, lastDestination.point, lastDestination.label);
+  } catch (e) {
+    showDestinationError(requestId, e);
+  }
+}
+
+async function searchOrigin() {
+  const input = document.getElementById('origin');
+  const btn = document.getElementById('setOriginBtn');
+  const query = input.value.trim();
+  if (!query) {
+    setOriginStatus('出発ステーション名を入力してください。', 'error');
+    return;
+  }
+
+  const requestId = ++originRequestId;
+  btn.disabled = true;
+  setOriginStatus('検索中...');
+  try {
+    const found = await geocode(query);
+    if (requestId !== originRequestId) return;
+    // 入力どおりの名前を表示に使う(検索結果の正式名称は長くなりがちなため)
+    await applyOrigin(found, query);
+    const foundName = shortPlaceName(found.name);
+    if (foundName !== query) setOriginStatus(`出発地を「${query}」(${foundName}付近)に設定しました。`, 'success');
+  } catch (e) {
+    if (requestId !== originRequestId) return;
+    setOriginStatus(`見つかりませんでした: ${e.message}(駅名や住所でも検索できます)`, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function setOriginFromMap(point) {
+  const requestId = ++originRequestId;
+  setOriginStatus('地名を取得中...');
+  const name = await reverseGeocodeName(point).catch(() => null);
+  if (requestId !== originRequestId) return;
+  // 出発地を決めたら、次のタップは行き先の選択に戻す
+  document.getElementById('mapMode-dest').checked = true;
+  await applyOrigin(point, name || '地図で選んだ出発地');
+}
+
+document.getElementById('setOriginBtn').addEventListener('click', searchOrigin);
+document.getElementById('origin').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    searchOrigin();
+  }
+});
+
+document.querySelectorAll('input[name="carClass"]').forEach((el) => {
+  el.addEventListener('change', () => {
+    saveSettings({ carClass: selectedClassId() });
+    render();
+  });
+});
+
+function restoreSettings() {
+  const saved = loadSettings();
+  if (saved.carClass && CAR_CLASSES[saved.carClass]) {
+    document.getElementById(`class-${saved.carClass}`).checked = true;
+  }
+  const o = saved.origin;
+  if (o && Number.isFinite(o.lat) && Number.isFinite(o.lon) && typeof o.name === 'string' && o.name) {
+    origin = { lat: o.lat, lon: o.lon, name: o.name };
+  }
+  document.getElementById('origin').value = origin.name;
+  document.getElementById('originBadge').textContent = origin.name;
 }
 
 document.getElementById('calcDistanceBtn').addEventListener('click', calcDistanceFromDestination);
@@ -573,6 +813,7 @@ document.getElementById('durHours').addEventListener('input', render);
 document.getElementById('durMinutes').addEventListener('input', render);
 document.getElementById('distance').addEventListener('input', render);
 
+restoreSettings();
 setDefaultStartTime();
 render();
 initDestinationMap();
