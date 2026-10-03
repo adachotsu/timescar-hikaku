@@ -287,7 +287,7 @@
 
   <div class="caveat">
     <strong>この計算について</strong><br>
-    タイムズカーシェア公式サイトの公開料金(ベーシッククラス:15分220円/6時間上限4,290円/12時間上限5,500円/24時間上限6,600円/36時間上限8,800円/48時間上限9,900円/72時間上限14,300円/以降1日毎5,500円、深夜パック2,640円・18:00〜翌9:00・延長6時間まで、距離料金20円/km)をもとに計算しています。<br><br>
+    タイムズカーシェア公式サイトの公開料金(ベーシッククラス:15分220円/6時間上限4,290円/12時間上限5,500円/24時間上限6,600円/36時間上限8,800円/48時間上限9,900円/72時間上限14,300円/以降1日毎5,500円、深夜パック2,640円・18:00〜翌9:00・延長6時間まで15分220円(最大時間料金なし)、延長上限を超えた分は返却遅延料金15分440円、距離料金20円/km)をもとに計算しています。<br><br>
     実際の九条エリア(タイムズ九条駅前第6・タイムズ九条第4)での利用明細4件と照合済みで、通常料金・深夜パックとも完全に一致することを確認しています。特に6時間上限が発動するケース(5時間39分利用で上限の4,290円に丸められる例)でも一致を確認できたため、上限の積み上がり方についても実データで裏付けが取れています。<br><br>
     ただし「距離料金ステージ割引」「カーシェアeチケット割引」など、会員ステージや保有チケットに応じた個人単位の割引はこの計算に含まれていません。実際の請求額はそうした割引分だけ、ここでの表示額より安くなる場合があります。
   </div>
@@ -299,6 +299,7 @@ const DISTANCE_RATE = 20;
 const FREE_KM_NORMAL = 20;
 const NIGHT_PACK_PRICE = 2640;
 const NIGHT_PACK_MAX_EXT_MIN = 6 * 60;
+const LATE_RATE_15MIN = RATE_15MIN * 2;
 
 const CAP_BRACKETS = [
   { hours: 6, price: 4290 },
@@ -356,20 +357,27 @@ function calcNight(startDateStr, durationMinutes, km) {
 
   const end = new Date(start.getTime() + durationMinutes * 60000);
   let extCost = 0;
+  let lateCost = 0;
   let overMax = false;
   if (end > boundary) {
     const extMin = (end - boundary) / 60000;
     overMax = extMin > NIGHT_PACK_MAX_EXT_MIN;
+    // パック延長は最大6時間まで15分220円(最大時間料金の適用なし)
     const cappedExtMin = Math.min(extMin, NIGHT_PACK_MAX_EXT_MIN);
-    const blocks = Math.ceil(cappedExtMin / 15);
-    extCost = blocks * RATE_15MIN;
+    extCost = Math.ceil(cappedExtMin / 15) * RATE_15MIN;
+    // 6時間を超えた分は予約できないため返却遅延扱い(通常の2倍・最大時間料金の適用なし)
+    if (overMax) {
+      const lateMin = extMin - NIGHT_PACK_MAX_EXT_MIN;
+      lateCost = Math.ceil(lateMin / 15) * LATE_RATE_15MIN;
+    }
   }
   const distFee = km * DISTANCE_RATE;
   return {
     eligible: true,
-    total: NIGHT_PACK_PRICE + extCost + distFee,
+    total: NIGHT_PACK_PRICE + extCost + lateCost + distFee,
     packCost: NIGHT_PACK_PRICE,
     extCost,
+    lateCost,
     distFee,
     overMax,
   };
@@ -425,8 +433,9 @@ function render() {
         <div class="breakdown">
           <span>パック料金: ${yen(night.packCost)}</span>
           ${night.extCost > 0 ? `<span>延長料金: ${yen(night.extCost)}</span>` : ''}
+          ${night.lateCost > 0 ? `<span>返却遅延料金: ${yen(night.lateCost)}</span>` : ''}
           <span>距離料金: ${yen(night.distFee)}</span>
-          ${night.overMax ? '<span style="color:#c94a08;">⚠ 延長上限(6時間)を超えています</span>' : ''}
+          ${night.overMax ? '<span style="color:#c94a08;">⚠ 延長上限(6時間)を超えるため予約できません。超過分は返却遅延料金(15分440円)で計算しています</span>' : ''}
         </div>
       </div>
     `;
