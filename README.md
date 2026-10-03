@@ -21,6 +21,14 @@
 
 `index.html` をブラウザで直接開くだけで動作します。ビルドや依存パッケージのインストールは不要です。
 
+## テスト
+
+料金計算ロジックは `pricing.js` にあり、`index.html` から読み込んでいます。Node.js 18 以上で次のコマンドを実行するとテストが走ります(依存パッケージなし)。
+
+```
+npm test
+```
+
 ## 公開URL(GitHub Pages)
 
 `main` に push すると GitHub Actions で自動的に GitHub Pages へデプロイされます。
